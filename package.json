@@ -1,0 +1,11 @@
+{
+  "name": "personal-blog",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "cache-images": "node scripts/cache-remote-images.mjs",
+    "dev": "python3 -m http.server 4173 -d public"
+  }
+}
