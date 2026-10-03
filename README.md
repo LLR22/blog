@@ -1,6 +1,6 @@
 # Personal Blog
 
-一个零依赖静态个人博客。文章内容放在 `content/` 下，用 Markdown 编写；运行构建脚本后会生成到 `public/`。
+一个零依赖静态个人主页与博客。首页展示个人信息、教育经历、内容统计和文章贡献记录；博客内容放在 `content/` 下，用 Markdown 编写。运行构建脚本后会生成到 `public/`。
 
 ## 内容结构
 
@@ -53,9 +53,9 @@ summary: 首页和分类页展示的摘要。
 
 ## 修改个人信息
 
-- 个人名字、简介、头像路径、个人网页、知乎、GitHub 链接：修改 `content/site.json`
-- 更完整的个人介绍：修改 `content/profile.md`
-- 头像：替换 `content/assets/avatar.svg`，也可以改成 `avatar.jpg` 或 `avatar.png`，并同步修改 `content/site.json` 里的 `avatar`
+- 个人名字、简介、头像路径、所在地、研究方向、教育经历和站外链接：修改 `content/site.json`
+- 头像：替换 `content/assets/avatar.png`，也可以改成其他图片，并同步修改 `content/site.json` 里的 `avatar`
+- Statistics 和贡献热力图由文章日期与正文内容在构建时自动计算
 
 ## 构建与预览
 
@@ -67,4 +67,4 @@ npm run dev
 
 如果 Markdown 里引用了远程图片，先运行 `npm run cache-images`，脚本会把图片保存到 `content/assets/remote/`。之后 `npm run build` 会优先使用本地缓存图片，避免外链图片加载失败。
 
-构建后的首页在 `public/index.html`。如果只是本地查看，也可以直接用浏览器打开这个文件。
+构建后的个人主页在 `public/index.html`，博客入口在 `public/blog.html`。如果只是本地查看，也可以直接用浏览器打开这些文件。

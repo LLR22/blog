@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="解决 vscode 无法 ssh 连接旧版本服务器的问题">
+  <title>使用 linuxbres 解决 vscode 无法 ssh 连接旧版本服务器的问题 - yany</title>
+  <link rel="icon" href="../assets/avatar.png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">Y</span>
+        <span class="brand-text">
+          <span class="brand-name">yany</span>
+          <span class="brand-subtitle">Master's Student</span>
+        </span>
+      </a>
+      <nav class="nav" aria-label="主导航"><a href="../index.html">Home</a><a class="active" aria-current="page" href="../blog.html">Blog</a></nav>
+    </div>
+  </header>
+  <main class="page article-page">
+  <p class="crumbs"><a href="../blog.html">Blog</a> / <a href="../categories/63b7dfc2dd74.html">Coding / debug</a></p>
+  <div class="article-layout has-toc">
+    <article class="article-shell">
+      <header class="article-header">
+        <p class="section-kicker">Coding / debug</p>
+        <h1>使用 linuxbres 解决 vscode 无法 ssh 连接旧版本服务器的问题</h1>
+        <p class="article-summary">解决 vscode 无法 ssh 连接旧版本服务器的问题</p>
+        <div class="meta"><time class="date">2026-06-25</time><span class="tag">debug</span></div>
+      </header>
+      <div class="content"><p>方法来源：​如何通过homebrew解决vscode无法连接老版本linux - 🛠工具与编程 / 💻编程 - 始徒Beginner 下载 linuxbrew</p>
+<p>下载 homebrew 到 /home/user/homebrew/ 下</p>
+<h2 id="h-2e3924fdf709">1. 创建一个 homebrew 目录</h2>
+<pre><code class="language-bash">mkdir -p ~/homebrew</code></pre>
+<h2 id="h-17b8bf52f3ba">2. 下载并解压 Homebrew</h2>
+<pre><code class="language-bash">curl -L https://github.com/Homebrew/brew/tarball/main \
+  | tar -xz --strip-components=1 -C ~/homebrew</code></pre>
+<p>配置 linuxbrew</p>
+<pre><code class="language-bash">echo 'eval &quot;$(~/homebrew/bin/brew shellenv)&quot;' &gt;&gt; ~/.bashrc
+eval &quot;$(~/homebrew/bin/brew shellenv)&quot;</code></pre>
+<p>检查是否安装成功</p>
+<pre><code class="language-bash">brew --version</code></pre>
+<p>安装基础依赖</p>
+<pre><code class="language-bash">brew doctor</code></pre>
+<p>让 vscode ssh 使用 linuxbrew 的 glib</p>
+<p>写入 vscode 读取的环境变量</p>
+<p>确认路径</p>
+<pre><code class="language-bash">brew --prefix glibc</code></pre>
+<h2 id="h-2ae79f704c34">假设路径是：/home/user/homebrew/</h2>
+<p>安装 glibc + patchelf</p>
+<pre><code class="language-bash">brew install glibc patchelf</code></pre>
+<p>写入 vscode 需要的环境变量</p>
+<pre><code class="language-bash">nano ~/.ssh/environment</code></pre>
+<p>在配置中写入：</p>
+<pre><code class="language-text">VSCODE_SERVER_CUSTOM_GLIBC_PATH=/home/user/homebrew/opt/glibc/lib
+VSCODE_SERVER_PATCHELF_PATH=/home/user/homebrew/bin/patchelf
+VSCODE_SERVER_CUSTOM_GLIBC_LINKER=/home/user/homebrew/opt/glibc/lib/ld-linux-x86-64.so.2</code></pre>
+<h2 id="h-febdceb3d644">注意这里的路径与前面保持一致</h2>
+<p>开启 ssh 读取环境变量</p>
+<p>这里需要用到 sudo 权限，打开：</p>
+<pre><code class="language-bash">sudo nano /etc/ssh/sshd_config</code></pre>
+<p>设置 PermitUserEnvironment 为：</p>
+<pre><code class="language-text">PermitUserEnvironment yes</code></pre>
+<p>重启 ssh 服务：</p>
+<pre><code class="language-bash">sudo systemctl restart sshd</code></pre>
+<p>一些检查</p>
+<pre><code class="language-bash">sshd -T | grep permituserenvironment
+# 期望输入为 PermitUserEnvironment yes</code></pre>
+<pre><code class="language-bash">ls -l ~/.ssh/environment
+#期望输出为 -rw------- 1 user data 222 4月 27 11:23 /home/user/.ssh/environment</code></pre>
+<p>如果这里输出为：</p>
+<pre><code class="language-text">-rw-r--r-- 1 user data 222 4月 27 11:23 /home/user/.ssh/environment</code></pre>
+<p>会导致文件权限不足，vscode连接时会直接忽略这个文件，导致我们的配置失败，因此需要修复权限：</p>
+<pre><code class="language-bash">chmod 600 ~/.ssh/environment</code></pre>
+<p>最后检查：</p>
+<pre><code class="language-bash">cat ~/.ssh/environment
+
+#期望输出为：
+VSCODE_SERVER_CUSTOM_GLIBC_PATH=/home/user/homebrew/opt/glibc/lib
+VSCODE_SERVER_PATCHELF_PATH=/home/user/homebrew/bin/patchelf
+VSCODE_SERVER_CUSTOM_GLIBC_LINKER=/home/user/homebrew/opt/glibc/lib/ld-linux-x86-64.so.2</code></pre>
+<p>vscode 连接</p>
+<p>在连接之前需要删除之前的缓存文件</p>
+<pre><code class="language-bash">rm -rf ~/.vscode-server</code></pre></div>
+    </article>
+    <aside class="toc" aria-label="文章目录">
+    <p>目录</p>
+    <ol><li class="toc-level-2"><a href="#h-2e3924fdf709">1. 创建一个 homebrew 目录</a></li><li class="toc-level-2"><a href="#h-17b8bf52f3ba">2. 下载并解压 Homebrew</a></li><li class="toc-level-2"><a href="#h-2ae79f704c34">假设路径是：/home/user/homebrew/</a></li><li class="toc-level-2"><a href="#h-febdceb3d644">注意这里的路径与前面保持一致</a></li></ol>
+  </aside>
+  </div>
+</main>
+  <footer class="footer">
+    <span>© 2026 yany</span>
+    <span>Learning in public, one note at a time.</span>
+  </footer>
+</body>
+</html>

@@ -1,8 +1,28 @@
 {
   "name": "yany",
-  "headline": "About me",
-  "bio": "这里写一段简短介绍：研究方向、当前关注的问题、喜欢做的项目，以及希望通过博客记录和分享的内容。",
-  "avatar": "assets/avatar.svg",
+  "headline": "Master's Student",
+  "bio": "I am a second-year Master’s student in Computer Science and Technology at Xi’an Jiaotong University. My research focuses on deep learning, generative models, and computer vision.",
+  "avatar": "assets/avatar.png",
+  "location": "Xi’an, China",
+  "researchInterests": [
+    "Deep Learning",
+    "Generative Models",
+    "Computer Vision"
+  ],
+  "education": [
+    {
+      "school": "Xi’an Jiaotong University",
+      "degree": "M.S. in Computer Science and Technology",
+      "period": "2025 — Present",
+      "description": "Researching deep learning, generative models, and computer vision."
+    },
+    {
+      "school": "Chongqing University",
+      "degree": "B.S. in Computer Science and Technology",
+      "period": "2021 — 2025",
+      "description": "Studied computer science fundamentals, algorithms, and software development."
+    }
+  ],
   "categoryOrder": [
     "项目/论文复现",
     "项目/其他项目",
@@ -12,16 +32,16 @@
   ],
   "links": [
     {
-      "label": "个人网页",
-      "url": "https://example.com"
+      "label": "Homepage",
+      "url": "https://llr22.github.io"
     },
     {
       "label": "知乎",
-      "url": "https://www.zhihu.com/people/your-id"
+      "url": "https://www.zhihu.com/people/zxc-82-37"
     },
     {
       "label": "GitHub",
-      "url": "https://github.com/your-id"
+      "url": "https://github.com/LLR22"
     }
   ]
 }

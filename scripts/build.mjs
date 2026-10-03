@@ -93,9 +93,11 @@ function renderInline(markdown, options = {}) {
       const imageSrc = resolveImageSrc(src.trim(), options.assetPrefix);
       return stash(`<img src="${htmlEscape(imageSrc)}" alt="${htmlEscape(alt)}">`);
     })
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) =>
-      stash(`<a href="${htmlEscape(href.trim())}">${htmlEscape(label)}</a>`)
-    );
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, href) => {
+      const target = href.trim();
+      if (/\s/.test(target)) return match;
+      return stash(`<a href="${htmlEscape(target)}">${htmlEscape(label)}</a>`);
+    });
 
   text = htmlEscape(text)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
@@ -362,7 +364,12 @@ function collectHeadings(markdown) {
 }
 
 function pageShell({ title, description = "", body, prefix = ".", nav = [] }) {
-  const navHtml = nav.map((item) => `<a href="${item.href}">${htmlEscape(item.label)}</a>`).join("");
+  const navHtml = nav
+    .map(
+      (item) =>
+        `<a${item.active ? ' class="active" aria-current="page"' : ""} href="${item.href}">${htmlEscape(item.label)}</a>`
+    )
+    .join("");
   const brandMark = Array.from(site.name || "B")[0]?.toUpperCase() || "B";
   const year = new Date().getFullYear();
   return `<!doctype html>
@@ -372,6 +379,7 @@ function pageShell({ title, description = "", body, prefix = ".", nav = [] }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="${htmlEscape(description)}">
   <title>${htmlEscape(title)}</title>
+  <link rel="icon" href="${prefix}/${htmlEscape(site.avatar)}">
   <link rel="stylesheet" href="${prefix}/assets/site.css">
 </head>
 <body>
@@ -388,7 +396,10 @@ function pageShell({ title, description = "", body, prefix = ".", nav = [] }) {
     </div>
   </header>
   ${body}
-  <footer class="footer">© ${year} ${htmlEscape(site.name)} · Notes, projects and paper trails.</footer>
+  <footer class="footer">
+    <span>© ${year} ${htmlEscape(site.name)}</span>
+    <span>Learning in public, one note at a time.</span>
+  </footer>
 </body>
 </html>`;
 }
@@ -414,7 +425,93 @@ function ensureCategory(categories, parts) {
 }
 
 function categoryDisplayName(category) {
-  return category.parts.length > 1 ? category.parts.slice(1).join(" / ") : "全部文章";
+  return category.parts.at(-1) || "全部文章";
+}
+
+function countWords(markdown) {
+  const plain = markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ");
+  const cjk = plain.match(/[\p{Script=Han}]/gu)?.length || 0;
+  const latin = plain.replace(/[\p{Script=Han}]/gu, " ").match(/[\p{L}\p{N}]+/gu)?.length || 0;
+  return cjk + latin;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return "—";
+  const date = new Date(`${dateString}T00:00:00Z`);
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
+}
+
+function formatCompactNumber(value) {
+  if (value >= 10000) return `${(value / 10000).toFixed(1)}w`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(value);
+}
+
+function icon(name) {
+  const paths = {
+    location: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+    arrow: '<path d="M5 12h14M14 7l5 5-5 5"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>'
+  };
+  return `<svg aria-hidden="true" viewBox="0 0 24 24">${paths[name] || paths.arrow}</svg>`;
+}
+
+function buildContributionGraph(posts) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setDate(end.getDate() + (6 - end.getDay()));
+  const start = new Date(end);
+  start.setDate(start.getDate() - 52 * 7 - 6);
+
+  const activity = new Map();
+  for (const post of posts) {
+    if (!post.date) continue;
+    activity.set(post.date, (activity.get(post.date) || 0) + 1);
+  }
+
+  const cells = [];
+  const months = [];
+  let previousMonth = -1;
+  for (let i = 0; i < 53 * 7; i += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    const key = date.toISOString().slice(0, 10);
+    const count = activity.get(key) || 0;
+    const future = date > today;
+    const level = future ? 0 : Math.min(4, count);
+    cells.push(
+      `<span class="contribution-cell level-${level}${future ? " future" : ""}" title="${key}: ${count} post${count === 1 ? "" : "s"}"></span>`
+    );
+
+    if (date.getMonth() !== previousMonth && date.getDate() <= 7) {
+      months.push({
+        label: new Intl.DateTimeFormat("en", { month: "short" }).format(date),
+        column: Math.floor(i / 7) + 1
+      });
+      previousMonth = date.getMonth();
+    }
+  }
+
+  const monthLabels = months
+    .map((month) => `<span style="grid-column:${month.column}">${month.label}</span>`)
+    .join("");
+  const total = [...activity.values()].reduce((sum, value) => sum + value, 0);
+  return `<div class="contribution-wrap" aria-label="Blog contributions over the last year">
+    <div class="contribution-months">${monthLabels}</div>
+    <div class="contribution-grid">${cells.join("")}</div>
+    <div class="contribution-caption">
+      <span>${total} post${total === 1 ? "" : "s"} published in the last year</span>
+      <span class="contribution-legend">Less <i class="level-0"></i><i class="level-1"></i><i class="level-2"></i><i class="level-3"></i><i class="level-4"></i> More</span>
+    </div>
+  </div>`;
 }
 
 let site = {};
@@ -427,13 +524,16 @@ async function main() {
 
   site = JSON.parse(await fs.readFile(path.join(contentDir, "site.json"), "utf8"));
 
-  const profileSource = await fs.readFile(path.join(contentDir, "profile.md"), "utf8");
-  const profile = parseFrontmatter(profileSource);
-  const profileHtml = renderMarkdown(profile.body, { assetPrefix: "." });
-
   const directoryParts = await findContentDirectories(contentDir);
   const declaredTopDirectories = directoryParts.filter((parts) => parts.length === 1).map((parts) => parts[0]);
-  const declaredCategoryDirectories = directoryParts.filter((parts) => parts.length > 1);
+  const declaredCategoryDirectories = directoryParts.filter(
+    (parts) =>
+      parts.length > 1 &&
+      !directoryParts.some(
+        (candidate) =>
+          candidate.length > parts.length && parts.every((part, index) => candidate[index] === part)
+      )
+  );
 
   const files = await findMarkdownFiles(contentDir);
   const posts = [];
@@ -453,6 +553,7 @@ async function main() {
       tags: Array.isArray(parsed.data.tags) ? parsed.data.tags : [],
       summary: parsed.data.summary || excerptFrom(parsed.body),
       body: parsed.body,
+      wordCount: countWords(parsed.body),
       categoryParts: effectiveCategoryParts,
       categoryLabel: effectiveCategoryParts.join(" / "),
       categoryId: hash(effectiveCategoryParts.join("/"))
@@ -471,7 +572,10 @@ async function main() {
   }
 
   const linkHtml = (site.links || [])
-    .map((link) => `<a class="link-pill" href="${htmlEscape(link.url)}" target="_blank" rel="noreferrer">${htmlEscape(link.label)}</a>`)
+    .map(
+      (link) =>
+        `<a class="link-pill" href="${htmlEscape(link.url)}" target="_blank" rel="noreferrer"><span>${htmlEscape(link.label)}</span>${icon("arrow")}</a>`
+    )
     .join("");
 
   const topNames = new Set(declaredTopDirectories);
@@ -501,11 +605,6 @@ async function main() {
       })
     ]);
   const orderedCategories = orderedGroups.flatMap(([, group]) => group);
-  const nav = orderedGroups.map(([label]) => ({
-    label,
-    href: `#${hash(label)}`
-  }));
-
   const sectionsHtml = orderedGroups
     .map(([top, group]) => {
       const cards = group
@@ -556,54 +655,119 @@ async function main() {
     )
     .join("");
 
+  const latestDate = posts.find((post) => post.date)?.date || "";
+  const firstDate = [...posts].reverse().find((post) => post.date)?.date || latestDate;
+  const today = new Date();
+  const firstDay = firstDate ? new Date(`${firstDate}T00:00:00`) : today;
+  const daysOnline = Math.max(1, Math.floor((today - firstDay) / 86400000) + 1);
+  const totalWords = posts.reduce((sum, post) => sum + post.wordCount, 0);
+  const educationHtml = (site.education || [])
+    .map(
+      (education) => `<article class="education-card">
+        <div>
+          <h3>${htmlEscape(education.school)}</h3>
+          <p>${htmlEscape(education.degree)}</p>
+          ${education.description ? `<span>${htmlEscape(education.description)}</span>` : ""}
+        </div>
+        <time>${htmlEscape(education.period)}</time>
+      </article>`
+    )
+    .join("");
+  const interestsHtml = (site.researchInterests || []).map((interest) => `<span>${htmlEscape(interest)}</span>`).join("");
+
   const index = pageShell({
-    title: `${site.name} - ${site.headline}`,
+    title: `${site.name} — ${site.headline}`,
     description: site.bio,
     prefix: ".",
-    nav,
+    nav: [
+      { label: "Home", href: "index.html", active: true },
+      { label: "Blog", href: "blog.html" }
+    ],
     body: `<main class="page home-page">
-  <section class="intro">
-    <div class="intro-copy">
-      <p class="eyebrow">${htmlEscape(site.headline)}</p>
-      <h1>${htmlEscape(site.name)}</h1>
-      <p>${htmlEscape(site.bio)}</p>
-      <div class="links">${linkHtml}</div>
-      <dl class="stats" aria-label="博客统计">
-        <div><dt>${posts.length}</dt><dd>文章</dd></div>
-        <div><dt>${categories.size}</dt><dd>分类</dd></div>
-        <div><dt>${orderedGroups.length}</dt><dd>主题</dd></div>
-      </dl>
-    </div>
-    <div class="portrait-panel">
-      <img class="avatar" src="${htmlEscape(site.avatar)}" alt="${htmlEscape(site.name)} 的头像">
-      <span class="portrait-label">Writing, building, learning</span>
-    </div>
-  </section>
-  <section class="home-section">
-    <div class="section-heading">
-      <div>
-        <p class="section-kicker">Recent</p>
-        <h2>最近更新</h2>
+  <div class="academic-layout">
+    <aside class="profile-sidebar">
+      <div class="profile-photo-wrap">
+        <img class="profile-photo" src="${htmlEscape(site.avatar)}" alt="${htmlEscape(site.name)} 的头像">
+        <span class="availability-dot" aria-label="Currently active"></span>
       </div>
-      <p>${posts.length} 篇文章</p>
-    </div>
-    <div class="feature-grid">${latestHtml}</div>
-  </section>
-  <section class="home-section">
-    <div class="section-heading">
-      <div>
-        <p class="section-kicker">About</p>
-        <h2>${htmlEscape(profile.data.title || "个人简介")}</h2>
+      <div class="sidebar-identity">
+        <h1>${htmlEscape(site.name)}</h1>
+        <p class="profile-role">${htmlEscape(site.headline)}</p>
+        <p class="profile-location">${icon("location")} ${htmlEscape(site.location || "")}</p>
       </div>
-      <p>Profile</p>
+      <div class="sidebar-links" aria-label="Contact links">${linkHtml}</div>
+      <section class="research-card">
+        <h2>Research Interests</h2>
+        <div class="interest-list" aria-label="Research interests">${interestsHtml}</div>
+      </section>
+    </aside>
+
+    <div class="profile-main">
+      <section class="academic-section about-section">
+        <p class="section-kicker">Introduction</p>
+        <h2>About</h2>
+        <p class="about-copy">${htmlEscape(site.bio)}</p>
+      </section>
+
+      <section class="academic-section">
+        <p class="section-kicker">Background</p>
+        <h2>Education</h2>
+        <div class="education-list">${educationHtml}</div>
+      </section>
+
+      <section class="academic-section statistics-section">
+        <p class="section-kicker">Writing activity</p>
+        <h2>Statistics</h2>
+        <div class="stat-cards">
+          <article>${icon("clock")}<strong>${daysOnline}</strong><span>Days Online</span></article>
+          <article>${icon("calendar")}<strong class="stat-date">${htmlEscape(formatDate(latestDate))}</strong><span>Last Updated</span></article>
+          <article>${icon("file")}<strong>${htmlEscape(formatCompactNumber(totalWords))}</strong><span>Total Words</span></article>
+        </div>
+        <div class="post-total"><span>Total Posts</span><strong>${posts.length}</strong></div>
+        ${buildContributionGraph(posts)}
+      </section>
     </div>
-    <div class="profile-panel content">${profileHtml}</div>
-  </section>
-  ${sectionsHtml}
+  </div>
 </main>`
   });
 
   await fs.writeFile(path.join(publicDir, "index.html"), index);
+
+  const blogPage = pageShell({
+    title: `Blog — ${site.name}`,
+    description: `Notes on research, engineering, and things learned along the way by ${site.name}.`,
+    prefix: ".",
+    nav: [
+      { label: "Home", href: "index.html" },
+      { label: "Blog", href: "blog.html", active: true }
+    ],
+    body: `<main class="page blog-page">
+  <header class="blog-hero">
+    <p class="eyebrow">Notes & field records</p>
+    <div>
+      <h1>Blog</h1>
+      <p>Research notes, engineering practice, and ideas worth keeping.</p>
+    </div>
+    <span>${posts.length} posts · ${orderedGroups.length} topics</span>
+  </header>
+  <section class="home-section latest-section">
+    <div class="section-heading">
+      <div><p class="section-kicker">Latest</p><h2>Recently published</h2></div>
+      <p>${htmlEscape(formatDate(latestDate))}</p>
+    </div>
+    <div class="feature-grid">${latestHtml}</div>
+  </section>
+  <section class="blog-archive">
+    <div class="section-heading">
+      <div><p class="section-kicker">Archive</p><h2>Browse by topic</h2></div>
+      <p>${categories.size} categories</p>
+    </div>
+    ${sectionsHtml}
+  </section>
+</main>`
+  });
+
+  await fs.writeFile(path.join(publicDir, "blog.html"), blogPage);
 
   for (const category of orderedCategories) {
     const articles = category.posts
@@ -620,10 +784,13 @@ async function main() {
       title: `${category.label} - ${site.name}`,
       description: `${category.label} 下的文章列表`,
       prefix: "..",
-      nav: [{ label: "首页", href: "../index.html" }],
+      nav: [
+        { label: "Home", href: "../index.html" },
+        { label: "Blog", href: "../blog.html", active: true }
+      ],
       body: `<main class="page listing-page">
   <header class="listing-hero">
-    <p class="crumbs"><a href="../index.html">首页</a> / ${htmlEscape(category.label)}</p>
+    <p class="crumbs"><a href="../blog.html">Blog</a> / ${htmlEscape(category.label)}</p>
     <p class="section-kicker">${htmlEscape(category.parts[0] || "Archive")}</p>
     <h1>${htmlEscape(categoryDisplayName(category))}</h1>
     <p>${htmlEscape(category.label)} 下共有 ${category.posts.length} 篇文章。</p>
@@ -651,11 +818,11 @@ async function main() {
       description: post.summary,
       prefix: "..",
       nav: [
-        { label: "首页", href: "../index.html" },
-        { label: post.categoryLabel, href: `../categories/${post.categoryId}.html` }
+        { label: "Home", href: "../index.html" },
+        { label: "Blog", href: "../blog.html", active: true }
       ],
       body: `<main class="page article-page">
-  <p class="crumbs"><a href="../index.html">首页</a> / <a href="../categories/${post.categoryId}.html">${htmlEscape(post.categoryLabel)}</a></p>
+  <p class="crumbs"><a href="../blog.html">Blog</a> / <a href="../categories/${post.categoryId}.html">${htmlEscape(post.categoryLabel)}</a></p>
   <div class="article-layout${tocHtml ? " has-toc" : ""}">
     <article class="article-shell">
       <header class="article-header">

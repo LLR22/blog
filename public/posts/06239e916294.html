@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="使用视觉自回归的方法，以 RF Signal 作为输入，生成分辨率更高的深度图。">
+  <title>RFVAR:基于视觉自回归实现 RF Imaging - yany</title>
+  <link rel="icon" href="../assets/avatar.png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark">Y</span>
+        <span class="brand-text">
+          <span class="brand-name">yany</span>
+          <span class="brand-subtitle">Master's Student</span>
+        </span>
+      </a>
+      <nav class="nav" aria-label="主导航"><a href="../index.html">Home</a><a class="active" aria-current="page" href="../blog.html">Blog</a></nav>
+    </div>
+  </header>
+  <main class="page article-page">
+  <p class="crumbs"><a href="../blog.html">Blog</a> / <a href="../categories/3848cde44c7b.html">Research / Mine</a></p>
+  <div class="article-layout has-toc">
+    <article class="article-shell">
+      <header class="article-header">
+        <p class="section-kicker">Research / Mine</p>
+        <h1>RFVAR:基于视觉自回归实现 RF Imaging</h1>
+        <p class="article-summary">使用视觉自回归的方法，以 RF Signal 作为输入，生成分辨率更高的深度图。</p>
+        <div class="meta"><time class="date">2026-06-25</time><span class="tag">生成模型</span></div>
+      </header>
+      <div class="content"><h1 id="h-addffbd87cf7">前言</h1>
+<p>要做的任务是基于 RF Signal，得到一个深度图，ground truth 是对应 lidar 收集到的数据，参考的工作是 Panoradar(mobicomp 2024)。 input 的 RF shape 是 [Batch, 256, H, W]，其中 256 是每个子载波接收的信号，target depth map shape 是 [B, 1, H, W]。</p>
+<p><img src="../assets/remote/36572da72dc2.png" alt="任务概述"></p>
+<p>Panoradar 在 Machine Learning（ML） 这一步用的是一个 unet，效果已经很不错了。在 RF 到 depth 这个任务中，ML 要做的事情既可以理解为提升RF分辨率，也可以理解为用 RF 作为条件，去生成一个 depth map。无论哪一种理解，Auto Regressive（AR）模型近期的工作都能涵盖，如基于低分辨率信号提升分辨率（VARSR（ICML2025），AlignVAR(CVPR2025)），或者基于一个条件信号做图像生成（VAR(NeurIps 2024)）。于是便考虑基于 Visual auto regressive 的方法做当前的 RF to depth 的任务，遗憾的是最终效果不好，本文将记录方法迁移过程，实验结果以及反思，相关代码在：<a href="https://github.com/LLR22/RFVAR.git">https://github.com/LLR22/RFVAR.git</a>。</p>
+<h1 id="h-1b671a578aae">方法概述</h1>
+<p>常规 VAR 的过程是这样的：<strong>首先预训练一个 </strong><strong>&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;multi-scale &lt;/font&gt;</strong><strong>VQVAE </strong>，关于 VQVAE，此处不再赘述，预训练目标是想要训练出一个离散的图像 representation，因为直接在 pixel 尺度做 AR 开销很大，所以经过 VQVAE 做压缩，在特征空间内做AR。该 representation 可以被表示为：</p>
+<p>$ F = \sum{_i^n {F_i}}  $</p>
+<p>每个 F 的 shape 是 [B, L_i. C]，其中 n 是设置的 scale 尺度，L_i 是对应 scale 的 tokens 数量。具体来说：</p>
+<p>$ F_i = DS(F) - UP(F_{i-1}) \\ F = Encoder(Image) $</p>
+<p>其中，DS 是下采样操作，将 [B,  C,  h , w](h*w = L) 的 F 下采样到对应的 scale，然后减去上一个scale的F上采样到当前 scale 到特征，目标是不同 sacle 之间没有冗余。</p>
+<p>在 VQVAE 预训练完成后，<strong>就进入到 VAR 主模型</strong>，VAR 基于多层 transformer 架构，自回归地预测每一个 scale 的 F_i 的概率分布，这一过程表示为：</p>
+<p>$ \mathbf{z}_i = \operatorname{VAR}_{\theta}(RF, F_{&lt;i}), \qquad p_{\theta}(F_i \mid RF, F_{&lt;i}) = \operatorname{Softmax}(\mathbf{z}_i). $</p>
+<p>使用对应的mask，transformer 的架构能够并行地去训练每一个sacle的生成过程，这里也不再赘述。</p>
+<p><img src="../assets/remote/faf39511e4a7.png" alt="方法概述"></p>
+<h1 id="h-f87679de9526">实践及实验结果</h1>
+<h2 id="h-a3e51eecd66c">VQVAE 预训练</h2>
+<p>在 RF to depth 这个任务中，我们最终想要得到的是 lidar 得到的 depth map 的分布，因此在预训练 VQVAE 时，直接用 target 的 depth map 去训练，训练对应的 depth map encoder/decoder。同时，也在这里预训练 RF encoder，为后面 VAR 模型提供一个好的先验。</p>
+<p><img src="../assets/remote/790b71eb5a14.png" alt="VQVAE预训练"></p>
+<p>这一阶段的损失函数如下，其中 lidar 指的是 target depth map，此处为了与 RF 信号区分，因此用 lidar 表示。</p>
+<p>$ Loss_{rec} = l1(lidar, lidar_{rec}), Loss_{align} = l1(F_{rf},F_{lidar}) $</p>
+<h2 id="h-8f36395429c6">VAR 训练</h2>
+<p>VAR 训练与常规的 VAR/VARSR 也没多大区别，都是将 RF encode 后的 representation 作为条件注入，然后用多层 transformer 去学习如何基于 F_{&lt;i} 生成 F_i 。</p>
+<p>在条件注入上，VAR/VARSR 采用的方式是 Concat(context, F_1, F_2, ... F_n), 训练过程就是基于 context去生成 F_1, 基于 F_1, context 去生成 F_2， ...。不过，VAR 的context 是文本，VARSR 是低分辨率的图像，在当前任务中，RF 的shape 是与 final scale 的 depth map shape一致的，比较大，直接用 concat 的方式，transformer 处理的序列有点太长了，训练也容易爆显存，因此这里我还尝试了将 RF 条件采样到多个尺度然后通过加法注入，以及用 cross attention，将 RF 条件作为 cross attention 的 k/v 注入。不过，实验表明，这三种方式的效果其实差不多。</p>
+<p><img src="../assets/remote/74f6d5391670.png" alt="图片来源于 VARSR，方法大概都差不多的，可以类比着看"></p>
+<h2 id="h-4b749e307a7e">损失函数</h2>
+<p>VAR 和 VARSR 的损失函数只有<strong>&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;Cross-Entropy Loss，&lt;/font&gt;</strong>&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;也就是 VAR 最后得到的 shape 为 [B, L] (L= sum{L_i}) 的 logits 与实际上 [B, L ] 的每个 token 在 codebook 上的分布的交叉熵损失。&lt;/font&gt;</p>
+<p>&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;这个损失存在一些问题，首先它平等看待每个 token，而 scale 越大，tokens数量越多，因此天然更偏向去做好后面 scale 的分类，而忽略前期 scale。另一方面，模型可能分类做得好，但实际图像重构出的效果有偏差。AlignVAR 也提到了这个问题，并且指出如果早期 scale 做不好，会严重损害整体的效果，AlignVAR 对此的解决方式是加了一个 hcc loss，如下图，相当于每个 scale 的 logtis 先采样直接得到每个尺度的特征，然后每个尺度的特征与 target 的每个尺度的特征做 l2 loss 计算，然后加起来。&lt;/font&gt;</p>
+<p><img src="../assets/remote/8e74a042f2dc.png" alt="AlignVAR的 hcc loss"></p>
+<p>我们也引入了这个 hcc loss，但是发现只有这两个 loss 重构出的图相当糟糕，如下。对此，我们任务原因是主 loss 是 ce loss，目标是在 codebook 上分类分得好，与重构出的图像效果如何没有直接关系，对此我们加了个 rec loss，在 hcc loss的基础上，将每个 scale 的 F 加起来并用 decoder 重构图像，计算与 target depth map 的 smooth l1 loss。</p>
+<p><img src="../assets/remote/250071a0027d.png" alt="只有 ce loss 和 hcc loss 的 VAR 结果"></p>
+<p>最终，我们的loss可以表示为：</p>
+<p>$ Loss_{final} = Loss_{CE} + Loss_{hcc} + Loss_{rec} $</p>
+<p>最后生成效果就比较对了，如下图，<strong>基于 VAR 的方法能够重构出一些基于 unet 的方法所重构不出的信息，如图中的白色方框圈出来的部分，这是全局注意力 or 生成模型 的胜利</strong><strong>✌️</strong>。</p>
+<p><img src="../assets/remote/a3f5b79ae485.png" alt="可视化效果图"></p>
+<h2 id="h-0dd5bb5e6ad1">存在的问题</h2>
+<p>令人遗憾的是，VAR方法在定量分析上，被 unet 全方位击败了。定量指标包括深度图的 l1 mean，l1 median，l1 80%，l1 90%，psnr，ssim，仅在 psnr 和 ssim 这两个指标上没被拉开太远。（如果效果好这篇文章也不会出现在知乎了...）</p>
+<h3 id="h-4f9e2fed0777">细节表现不足</h3>
+<p>表现结果差的可能性有很多，首先 VAR 学的是 encoder 压缩后的 latent space，这里天然有细节丢失的问题。此外，RF encoder 为了与 VQVAE 匹配，也是先进行了多轮的 down sample，VAR 使用被高度压缩后的 RF representation 作为生成条件，而 unet 对 RF 信号没压缩这么狠。虽然VQVAE重构上限很高，但当前 VAR 出的图的细节不足，如下图。</p>
+<p><img src="../assets/remote/f70962e2b3f2.png" alt="VAR生成图像对比unet细节不足"></p>
+<h2 id="h-d57895776c43">Exposure Bias</h2>
+<p>另一方面，VAR 存在<strong> </strong><strong>&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;Exposure Bias 问题&lt;/font&gt;</strong>&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;，训练时 VAR 模型学的是如何基于 F&lt;i 的 ground truth 去生成 F_i 的概率分布，而推理时，需要基于模型生成的 F&lt;i 去推理 F_i，训练和推理存在偏差。当前 VAR 设置了 5 个scale，实验表明，在 scale = 3 时，模型开始出现严重的推理偏差。在其中一个测试集上，unet baseline 的 depth l1 mean 是 0.0133，VAR 的 depth l1 mean 是 0.0150。我们发现，如果把 scale 3 的 F predicted 改为 F target，那么 VAR 的 depth l1 mean 能迅速降低到 0.0130。如果将 scale 3 的 F predicted 改为 retarget 后的 F ground truth（即如果 scale 1 和 scale 2 用VAR生成的F，那么ground truth的 F scale 3），depth l1 mean 能降低到 0.0110，一个很大的提升。可惜的是，如果用 retarget 后的结果做 Fine Tuning，最终 depth l1 mean 只能到 0.0140，虽然对比之前提升也很大，但是还是不够。&lt;/font&gt;</p>
+<h2 id="h-09491f98b552">&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;数据量不足&lt;/font&gt;</h2>
+<p>CNN 天然看重局部关联，还有平移不变性等先验，而 Transformer 都需要从数据中学习。在数据量不足等时候，Transformer架构比不过卷积网络也正常。当前我们的实验都只在 Panoradar 的数据集上做的，可能存在数据量不足的问题。</p>
+<p><img src="../assets/remote/a2fdd72178cb.png" alt="来源：为什么会有CNN+Transformer这样的结构？ - chouheiwa的回答 - 知乎 https://www.zhihu.com/question/791793922/answer/2049550272591091553"></p>
+<h1 id="h-81c42e20cb54">反思</h1>
+<p>no free lunch，看起来对的方法迁移过去也是困难重重啊</p>
+<p><img src="../assets/remote/1ca37964d980.png" alt=""></p></div>
+    </article>
+    <aside class="toc" aria-label="文章目录">
+    <p>目录</p>
+    <ol><li class="toc-level-1"><a href="#h-addffbd87cf7">前言</a></li><li class="toc-level-1"><a href="#h-1b671a578aae">方法概述</a></li><li class="toc-level-1"><a href="#h-f87679de9526">实践及实验结果</a></li><li class="toc-level-2"><a href="#h-a3e51eecd66c">VQVAE 预训练</a></li><li class="toc-level-2"><a href="#h-8f36395429c6">VAR 训练</a></li><li class="toc-level-2"><a href="#h-4b749e307a7e">损失函数</a></li><li class="toc-level-2"><a href="#h-0dd5bb5e6ad1">存在的问题</a></li><li class="toc-level-3"><a href="#h-4f9e2fed0777">细节表现不足</a></li><li class="toc-level-2"><a href="#h-d57895776c43">Exposure Bias</a></li><li class="toc-level-2"><a href="#h-09491f98b552">&lt;font style=&quot;color:rgb(0, 0, 0);&quot;&gt;数据量不足&lt;/font&gt;</a></li><li class="toc-level-1"><a href="#h-81c42e20cb54">反思</a></li></ol>
+  </aside>
+  </div>
+</main>
+  <footer class="footer">
+    <span>© 2026 yany</span>
+    <span>Learning in public, one note at a time.</span>
+  </footer>
+</body>
+</html>

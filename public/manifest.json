@@ -1,35 +1,41 @@
 {
-  "generatedAt": "2026-04-25T09:20:12.244Z",
+  "generatedAt": "2026-10-03T08:34:51.742Z",
   "posts": [
     {
+      "title": "使用 linuxbres 解决 vscode 无法 ssh 连接旧版本服务器的问题",
+      "source": "Coding/debug/connect_old_ssh.md",
+      "output": "posts/b00788e3685a.html",
+      "category": "Coding / debug"
+    },
+    {
+      "title": "InfiniDepth:实现任意分辨率的深度估计",
+      "source": "Research/spatial-reasoning/infiniDepth.md",
+      "output": "posts/0a223d1c9b61.html",
+      "category": "Research / spatial-reasoning"
+    },
+    {
+      "title": "MinoOB 部分架构实现",
+      "source": "Coding/project/miniob.md",
+      "output": "posts/19565286b5d2.html",
+      "category": "Coding / project"
+    },
+    {
+      "title": "RFVAR:基于视觉自回归实现 RF Imaging",
+      "source": "Research/Mine/RFVAR.md",
+      "output": "posts/06239e916294.html",
+      "category": "Research / Mine"
+    },
+    {
+      "title": "WildDet3D:一个通用的开集3D检测数据集及架构",
+      "source": "Research/spatial-reasoning/WildDet3D.md",
+      "output": "posts/69905cd989b0.html",
+      "category": "Research / spatial-reasoning"
+    },
+    {
       "title": "大模型原理、训练及微调",
-      "source": "博客分享/LLM-Related/LLM.md",
-      "output": "posts/7fa5c16bc1f0.html",
-      "category": "博客分享 / LLM-Related"
-    },
-    {
-      "title": "第一篇论文复现示例",
-      "source": "项目/论文复现/第一篇论文复现示例.md",
-      "output": "posts/a83345d17880.html",
-      "category": "项目 / 论文复现"
-    },
-    {
-      "title": "论文阅读示例",
-      "source": "Research/论文分享/论文阅读示例.md",
-      "output": "posts/2dbf4d108080.html",
-      "category": "Research / 论文分享"
-    },
-    {
-      "title": "项目示例",
-      "source": "项目/其他项目/项目示例.md",
-      "output": "posts/90e9f49990b6.html",
-      "category": "项目 / 其他项目"
-    },
-    {
-      "title": "Linux 常用命令",
-      "source": "博客分享/linux系统/Linux 常用命令.md",
-      "output": "posts/2eefb3fef4de.html",
-      "category": "博客分享 / linux系统"
+      "source": "Research/生成模型/AutoRegressive/LLM.md",
+      "output": "posts/700a9f6776bf.html",
+      "category": "Research / 生成模型 / AutoRegressive"
     }
   ]
 }

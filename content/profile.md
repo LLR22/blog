@@ -2,16 +2,14 @@
 title: 个人简介
 ---
 
-你好，我是写成猫。
-
-这里可以补充更完整的个人介绍，例如教育背景、研究方向、技术栈、正在做的事情，以及博客主要记录的主题。
+I am a second-year Master’s student in Computer Science and Technology at Xi’an Jiaotong University. My research focuses on deep learning, generative models, and computer vision.
 
 ## 关注方向
 
-- 论文阅读与复现
-- Linux 系统与工程实践
-- 机器学习、后端开发或其他你关心的技术主题
+- Deep learning
+- Generative models
+- Computer vision
 
 ## 联系方式
 
-个人网页、知乎和 GitHub 会集中放在首页链接区，方便快速访问。
+个人主页、知乎和 GitHub 集中放在首页链接区，方便快速访问。
