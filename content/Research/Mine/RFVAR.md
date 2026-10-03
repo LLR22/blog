@@ -83,9 +83,9 @@ $ Loss_{final} = Loss_{CE} + Loss_{hcc} + Loss_{rec} $
 ![VAR生成图像对比unet细节不足](https://cdn.nlark.com/yuque/0/2026/png/40548026/1786525639958-59ee8cd3-f5fc-4904-b232-7f56b5ed35ca.png)
 
 ## Exposure Bias
-另一方面，VAR 存在** ****<font style="color:rgb(0, 0, 0);">Exposure Bias 问题</font>**<font style="color:rgb(0, 0, 0);">，训练时 VAR 模型学的是如何基于 F<i 的 ground truth 去生成 F_i 的概率分布，而推理时，需要基于模型生成的 F<i 去推理 F_i，训练和推理存在偏差。当前 VAR 设置了 5 个scale，实验表明，在 scale = 3 时，模型开始出现严重的推理偏差。在其中一个测试集上，unet baseline 的 depth l1 mean 是 0.0133，VAR 的 depth l1 mean 是 0.0150。我们发现，如果把 scale 3 的 F predicted 改为 F target，那么 VAR 的 depth l1 mean 能迅速降低到 0.0130。如果将 scale 3 的 F predicted 改为 retarget 后的 F ground truth（即如果 scale 1 和 scale 2 用VAR生成的F，那么ground truth的 F scale 3），depth l1 mean 能降低到 0.0110，一个很大的提升。可惜的是，如果用 retarget 后的结果做 Fine Tuning，最终 depth l1 mean 只能到 0.0140，虽然对比之前提升也很大，但是还是不够。</font>
+另一方面，VAR 存在"Exposure Bias 问题"训练时 VAR 模型学的是如何基于 F_i 的 ground truth 去生成 F_i 的概率分布，而推理时，需要基于模型生成的 F_i 去推理 F_i，训练和推理存在偏差。当前 VAR 设置了 5 个scale，实验表明，在 scale = 3 时，模型开始出现严重的推理偏差。在其中一个测试集上，unet baseline 的 depth l1 mean 是 0.0133，VAR 的 depth l1 mean 是 0.0150。我们发现，如果把 scale 3 的 F predicted 改为 F target，那么 VAR 的 depth l1 mean 能迅速降低到 0.0130。如果将 scale 3 的 F predicted 改为 retarget 后的 F ground truth（即如果 scale 1 和 scale 2 用VAR生成的F，那么ground truth的 F scale 3），depth l1 mean 能降低到 0.0110，一个很大的提升。可惜的是，如果用 retarget 后的结果做 Fine Tuning，最终 depth l1 mean 只能到 0.0140，虽然对比之前提升也很大，但是还是不够。
 
-## <font style="color:rgb(0, 0, 0);">数据量不足</font>
+## 数据量不足
 CNN 天然看重局部关联，还有平移不变性等先验，而 Transformer 都需要从数据中学习。在数据量不足等时候，Transformer架构比不过卷积网络也正常。当前我们的实验都只在 Panoradar 的数据集上做的，可能存在数据量不足的问题。
 
 ![来源：为什么会有CNN+Transformer这样的结构？ - chouheiwa的回答 - 知乎 https://www.zhihu.com/question/791793922/answer/2049550272591091553](https://cdn.nlark.com/yuque/0/2026/png/40548026/1786526809947-12c446fd-5839-4446-aee2-f72fc6aeed9f.png)
